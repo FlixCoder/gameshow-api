@@ -1,0 +1,12 @@
+[package]
+name = "fcgi-gameshow-api"
+version = "0.1.0"
+authors = ["FlixCoder"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+gfcgi = "0.4.3"
+
+
