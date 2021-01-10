@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Admin Gameshow</title>
+        <link rel="icon" type="image/png" href="favicon.png">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="preconnect" href="https://fonts.gstatic.com">
+        <script src="https://cdn.jsdelivr.net/npm/vue@2.6.12/dist/vue.js"></script>
+        <!-- <script src="https://cdn.jsdelivr.net/npm/vue@2.6.12"></script> -->
+        <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@700&display=swap" rel="stylesheet">
+        
+        <style>
+            body, #vueApp
+            {
+                margin: 0;
+                padding: 0;
+            }
+            
+            .transition-enter, .transition-leave-to
+            {
+                opacity: 0;
+                transform: scale(0.5, 0.5) translate(0, 50%);
+            }
+            .transition-enter-active, .transition-leave-active, .transition-move
+            {
+                transition: all 0.5s ease;
+            }
+
+            #appWindow
+            {
+                width: 100%;
+                min-height: 100vh;
+                overflow-x: hidden;
+                background: radial-gradient(circle, #008800 0%, #002200 95%) no-repeat center fixed;
+                display: flex;
+                flex-wrap: wrap;
+                flex-direction: row;
+                justify-content: space-evenly;
+                align-items: flex-start;
+                align-content: space-evenly;
+            }
+            
+            .compWindow
+            {
+                border: 2px solid white;
+                padding: 1em;
+                background: radial-gradient(circle, #000080 0%, #000030 100%) no-repeat center;
+                font-family: 'Nunito Sans', sans-serif;
+                font-size: large;
+                color: white;
+                text-shadow: 3px 2px 4px #222222;
+                margin: 1em;
+            }
+            
+            table.nameList
+            {
+                border-spacing: 1ex 0;
+                font-size: large;
+                padding: 0;
+                margin: 0;
+            }
+            table.nameList tr td:nth-child(2n+3)
+            {
+                color: #FFDD77;
+                text-align: right;
+            }
+            
+            table.question-design
+            {
+                border-spacing: 1em 1ex;
+                max-width: 50vw;
+            }
+            
+            .quizElement
+            {
+                background: linear-gradient(0deg, #0000C0 0%, #000080 50%, #0000C0 100%);
+                text-align: center;
+                padding: 1ex 1em;
+                border-radius: 1ex;
+            }
+            
+            .quizElementCorrect
+            {
+                background: linear-gradient(0deg, #007700 0%, #33DD33 50%, #007700 100%);
+            }
+            
+            .answer
+            {
+                text-align: left;
+                font-size: smaller;
+                width: 50%;
+            }
+        </style>
+    </head>
+    
+    
+    <body>
+        <div id="vueApp">
+            <transition-group tag="div" id="appWindow" name="transition" appear>
+                
+                <div key="player-stuff">
+                    <player-list key="player-list" :players="players" :question-type="current_question.type"></player-list>
+                    <player-kicker key="player-kicker" @kick="kickPlayer"></player-kicker>
+                </div>
+                
+                <controller-window key="controller-window" @next-question="activateNextQuestion" @force-answering="forceQuestionAnswering" @force-results="forceQuestionResults" @set-next-question="setNextQuestion" @load-questions="loadQuestions"></controller-window>
+                
+                <div key="set-player-attributes">
+                    <manual-money-giver key="money-giver" @give-money="giveMoney"></manual-money-giver>
+                    <manual-joker-setter key="joker-setter" @set-jokers="setJokers"></manual-joker-setter>
+                </div>
+                
+                <question-shower key="question-shower" :question="current_question" :show_correct_answer="current_question.correct_answer != 0"></question-shower>
+                
+                <div key="state-and-results">
+                    <state-display key="state-display" :status="status" :status_start="status_start"></state-display>
+                    <results-shower key="results-shower" :question-type="results_question_type" :players-prev="results_players_prev" :players-new="results_players_new"></results-shower>
+                </div>
+                
+            </transition-group>
+        </div>
+        
+        
+        <script>
+            Vue.component("player-list", {
+                props: ["players", "questionType"],
+                template: `
+                    <div class="compWindow" style="padding: 1ex 1em;">
+                        <span style="color: #FFDD77; font-size: xx-large">Players</span>
+                        <table class="nameList">
+                            <tr v-for="player of players" :key="player.name">
+                                <td>{{ player.name }} ({{ player.jokers }})</td>
+                                <td>-</td>
+                                <td>{{ player.money }} €</td>
+                                <template v-if="questionType == 'BettingQuestion'">
+                                    <td>-&gt;</td>
+                                    <td>{{ player.money_bet != 0 ? player.money_bet + " €" : "None" }}</td>
+                                </template>
+                                <template v-else-if="questionType == 'VersusQuestion'">
+                                    <td>-&gt;</td>
+                                    <td>{{ player.vs_player != "" ? player.vs_player : "Nobody" }}</td>
+                                </template>
+                                <template v-if="questionType == 'EstimationQuestion'">
+                                    <td>-&gt;</td>
+                                    <td>{{ player.answer != 0 ? player.answer : "None" }}</td>
+                                </template>
+                                <template v-else>
+                                    <td>-&gt;</td>
+                                    <td>{{ answerChar[player.answer] }}</td>
+                                </template>
+                            </tr>
+                        </table>
+                    </div>
+                `,
+                data: function() { return {
+                    answerChar: ["None", "a)", "b)", "c)", "d)"],
+                }; },
+            });
+            
+            Vue.component("manual-money-giver", {
+                template: `
+                    <div class="compWindow">
+                        <span>Give money to player</span>
+                        <form @submit.prevent="$emit('give-money', {name: name, money: money})">
+                            <input type="text" name="name" placeholder="<Name>" v-model.trim="name" style="width: 100%; box-sizing: border-box;"><br>
+                            <input type="number" name="money" placeholder="<Money>" v-model.number="money" style="width: 100%; box-sizing: border-box;"><br>
+                            <input type="submit" value="Submit" style="width: 100%;">
+                        </form>
+                    </div>
+                `,
+                data: function() { return {
+                    name: "",
+                    money: 0,
+                }; },
+            });
+            
+            Vue.component("manual-joker-setter", {
+                template: `
+                    <div class="compWindow">
+                        <span>Set player's jokers</span>
+                        <form @submit.prevent="$emit('set-jokers', {name: name, jokers: jokers})">
+                            <input type="text" name="name" placeholder="<Name>" v-model.trim="name" style="width: 100%; box-sizing: border-box;"><br>
+                            <input type="number" name="jokers" placeholder="<#Jokers>" v-model.number="jokers" style="width: 100%; box-sizing: border-box;"><br>
+                            <input type="submit" value="Submit" style="width: 100%;">
+                        </form>
+                    </div>
+                `,
+                data: function() { return {
+                    name: "",
+                    jokers: 0,
+                }; },
+            });
+            
+            Vue.component("player-kicker", {
+                template: `
+                    <div class="compWindow">
+                        <span>Kick player</span>
+                        <form @submit.prevent="$emit('kick', name)">
+                            <input type="text" name="name" placeholder="<Name>" v-model.trim="name" style="width: 100%; box-sizing: border-box;"><br>
+                            <input type="submit" value="Submit" style="width: 100%;">
+                        </form>
+                    </div>
+                `,
+                data: function() { return {
+                    name: "",
+                }; },
+            });
+            
+            Vue.component("controller-window", {
+                template: `
+                    <div class="compWindow">
+                        <span>Controller</span>
+                        <table style="width: 100%; min-width: 10em; border-spacing: 0 1ex;">
+                            <tr><td>
+                                <input type="button" value="Start Next Question" @click="$emit('next-question')" style="width: 100%; height: 4em;">
+                            </td></tr>
+                            <tr><td>
+                                <input type="button" value="Force End Betting/Selecting" @click="$emit('force-answering')" style="width: 100%; height: 3em;">
+                            </td></tr>
+                            <tr><td>
+                                <input type="button" value="Force End Answering" @click="$emit('force-results')" style="width: 100%; height: 3em;">
+                            </td></tr>
+                            <tr><td style="padding-top: 1ex;">
+                                <input type="number" name="setNextQuestionValue" placeholder="<next question ID>" v-model.number="setNextQuestionValue" style="width: 100%; height: 3em; box-sizing: border-box;"><br>
+                                <input type="button" value="Set Next Question ID" @click="$emit('set-next-question', setNextQuestionValue)" style="width: 100%; height: 3em;">
+                            </td></tr>
+                            <tr><td style="padding-top: 1ex;">
+                                <input type="text" name="loadQuestionsFilename" placeholder="<questions file>" v-model.trim="questionsFile" style="width: 100%; height: 3em; box-sizing: border-box;"><br>
+                                <input type="button" value="Load Questions" @click="$emit('load-questions', questionsFile)" style="width: 100%; height: 3em;">
+                            </td></tr>
+                        </table>
+                    </div>
+                `,
+                data: function() { return {
+                    setNextQuestionValue: "",
+                    questionsFile: "questions.json",
+                }; },
+            });
+            
+            Vue.component("question-shower", {
+                props: ["question", "show_correct_answer"],
+                template: `
+                    <div class="compWindow">
+                        <span style="color: #FFDD77; font-size: x-large;">Question {{ question.id }}:</span>
+                        <span>{{ question.category }}</span>
+                        <br>
+                        <table class="question-design">
+                            <tr><td colspan="2" class="quizElement">{{ question.question != "" ? question.question : "???" }}</td></tr>
+                            <tr></tr>
+                            <template v-if="question.type == 'EstimationQuestion'">
+                                <tr>
+                                    <td colspan="2">Correct answer: {{ question.correct_answer != 0 ? question.correct_answer : "???" }}</td>
+                                </tr>
+                            </template>
+                            <template v-else>
+                                <tr>
+                                    <td class="quizElement answer" v-bind:class="quizAnsClasses[0]">a) {{ question.answers.length > 0 ? question.answers[0] : "???" }}</td>
+                                    <td class="quizElement answer" v-bind:class="quizAnsClasses[1]">b) {{ question.answers.length > 1 ? question.answers[1] : "???" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="quizElement answer" v-bind:class="quizAnsClasses[2]">c) {{ question.answers.length > 2 ? question.answers[2] : "???" }}</td>
+                                    <td class="quizElement answer" v-bind:class="quizAnsClasses[3]">d) {{ question.answers.length > 3 ? question.answers[3] : "???" }}</td>
+                                </tr>
+                            </template>
+                        </table>
+                    </div>
+                `,
+                computed: {
+                    quizAnsClasses: function()
+                    {
+                        let qAC = [{"quizElementCorrect": false},
+                            {"quizElementCorrect": false},
+                            {"quizElementCorrect": false},
+                            {"quizElementCorrect": false}];
+                        if (this.show_correct_answer && this.question.type != "EstimationQuestion")
+                        {
+                            qAC[this.question.correct_answer - 1]["quizElementCorrect"] = true;
+                        }
+                        return qAC;
+                    },
+                },
+            });
+            
+            Vue.component("state-display", {
+                props: ["status", "status_start"],
+                template: `
+                    <div class="compWindow">
+                        <span style="color: #FFDD77; font-size: x-large;">Status:</span>
+                        <span>{{ status }} ({{ secondsSinceStart }})</span>
+                    </div>
+                `,
+                data: function() { return {
+                    current_time: Date.now(),
+                    interval: null,
+                }; },
+                computed: {
+                    secondsSinceStart: function()
+                    {
+                        let diff = this.current_time - this.status_start;
+                        diff = Math.round(diff / 1000);
+                        return `${diff}`; //formatted seconds since start
+                    },
+                },
+                methods: {
+                    secondUpdate: function()
+                    {
+                        this.current_time = Date.now();
+                    },
+                },
+                mounted: function()
+                {
+                    this.interval = setInterval(function(comp) { comp.secondUpdate(); }, 1000, this);
+                },
+            });
+            
+            Vue.component("results-shower", {
+                props: ["questionType", "playersPrev", "playersNew"],
+                template: `
+                    <div class="compWindow" style="padding: 1ex 1em;">
+                        <span style="color: #FFDD77;">Players' answers</span>
+                        <table class="nameList">
+                            <tr v-for="(player, index) of playersPrev" :key="player.name">
+                                <td>{{ player.name }}</td>
+                                <template v-if="questionType == 'BettingQuestion'">
+                                    <td>bets</td>
+                                    <td>{{ player.money_bet != 0 ? player.money_bet + " €" : "None" }}</td>
+                                    <td>and says</td>
+                                </template>
+                                <template v-else-if="questionType == 'VersusQuestion'">
+                                    <td>attacks</td>
+                                    <td>{{ player.vs_player != "" ? player.vs_player : "Nobody" }}</td>
+                                    <td>and says</td>
+                                </template>
+                                <template v-else>
+                                    <td>says</td>
+                                </template>
+                                <template v-if="questionType == 'EstimationQuestion'">
+                                    <td>{{ player.answer != 0 ? player.answer : "None" }}</td>
+                                </template>
+                                <template v-else>
+                                    <td>{{ answerChar[player.answer] }}</td>
+                                </template>
+                                <td>-&gt;</td>
+                                <td>{{ (playersNew[index].money > player.money ? "+" : "") + (playersNew[index].money - player.money).toString() }} €</td>
+                            </tr>
+                        </table>
+                    </div>
+                `,
+                data: function() { return {
+                    answerChar: ["None", "a)", "b)", "c)", "d)"],
+                }; },
+            });
+            
+            
+            var apiPath = "api/";
+            
+            var app = new Vue({
+                el: "#vueApp",
+                
+                data: {
+                    players: [],
+                    current_question: {id: 0, type: "", category: "", question: "", answers: [], correct_answer: 0, wrong_answers: []},
+                    last_event_id: -1,
+                    results_players_prev: [],
+                    results_players_new: [],
+                    results_question_type: "",
+                    status: "beginning",
+                    status_start: Date.now(),
+                },
+                
+                methods: {
+                    intervalServerUpdate: async function()
+                    {
+                        let getGameEventsResp = fetch(apiPath + "getGameEvents");
+                        let getPlayerDataResp = fetch(apiPath + "getPlayerData");
+                        
+                        getGameEventsResp = await getGameEventsResp;
+                        if (!getGameEventsResp.ok)
+                        {
+                            let body = await getGameEventsResp.text();
+                            console.log(`getGameEvents failed! \n ${getGameEventsResp.status} ${getGameEventsResp.statusText} \n ${body}`);
+                        }
+                        else
+                        {
+                            let events = await getGameEventsResp.json();
+                            for (event of events)
+                            {
+                                if (event.id > this.last_event_id)
+                                {
+                                    switch (event.event_name)
+                                    {
+                                        case "BeginNormalQAnswering":
+                                            this.eventBeginNormalQAnswering(event.event[event.event_name]);
+                                            break;
+                                        case "BeginBettingQBetting":
+                                            this.eventBeginBettingQBetting(event.event[event.event_name]);
+                                            break;
+                                        case "BeginBettingQAnswering":
+                                            this.eventBeginBettingQAnswering(event.event[event.event_name]);
+                                            break;
+                                        case "BeginEstimationQAnswering":
+                                            this.eventBeginEstimationQAnswering(event.event[event.event_name]);
+                                            break;
+                                        case "BeginVersusQSelecting":
+                                            this.eventBeginVersusQSelecting(event.event[event.event_name]);
+                                            break;
+                                        case "BeginVersusQAnswering":
+                                            this.eventBeginVersusQAnswering(event.event[event.event_name]);
+                                            break;
+                                        case "ShowResults":
+                                            this.eventShowResults(event.event[event.event_name]);
+                                            break;
+                                        case "GameEnding":
+                                            this.eventGameEnding(event.event[event.event_name]);
+                                            break;
+                                        default:
+                                            console.log("Unknown event: " + event.event_name);
+                                    }
+                                    this.last_event_id = event.id;
+                                }
+                            }
+                        }
+                        
+                        getPlayerDataResp = await getPlayerDataResp;
+                        if (!getPlayerDataResp.ok)
+                        {
+                            let body = await getPlayerDataResp.text();
+                            console.log(`getGameEvents failed! \n ${getPlayerDataResp.status} ${getPlayerDataResp.statusText} \n ${body}`);
+                        }
+                        else
+                        {
+                            this.players = await getPlayerDataResp.json();
+                        }
+                    },
+                    giveMoney: async function(data)
+                    {
+                        let request = {
+                            method: "POST",
+                            headers: {"Content-Type": "application/json"},
+                            body: JSON.stringify(data),
+                        };
+                        let response = await fetch(apiPath + "giveMoney", request);
+                        if (!response.ok)
+                        {
+                            let body = await response.text();
+                            alert(`Action failed! \n ${response.status} ${response.statusText} \n ${body}`);
+                        }
+                        else
+                        {
+                            let newMoney = await response.json();
+                            for (player of this.players)
+                            {
+                                if (player.name == newMoney.name)
+                                {
+                                    player.money = newMoney.money;
+                                }
+                            }
+                        }
+                    },
+                    setJokers: async function(data)
+                    {
+                        let request = {
+                            method: "POST",
+                            headers: {"Content-Type": "application/json"},
+                            body: JSON.stringify(data),
+                        };
+                        let response = await fetch(apiPath + "setJokers", request);
+                        if (!response.ok)
+                        {
+                            let body = await response.text();
+                            alert(`Action failed! \n ${response.status} ${response.statusText} \n ${body}`);
+                        }
+                        else
+                        {
+                            let newJokers = await response.json();
+                            for (player of this.players)
+                            {
+                                if (player.name == newJokers.name)
+                                {
+                                    player.jokers = newJokers.jokers;
+                                }
+                            }
+                        }
+                    },
+                    kickPlayer: async function(name)
+                    {
+                        let response = await fetch(apiPath + "kickPlayer?name=" + encodeURIComponent(name));
+                        if (!response.ok)
+                        {
+                            let body = await response.text();
+                            alert(`Action failed! \n ${response.status} ${response.statusText} \n ${body}`);
+                        }
+                        else
+                        {
+                            this.players = this.players.filter(player => player.name != name);
+                        }
+                    },
+                    activateNextQuestion: async function()
+                    {
+                        let response = await fetch(apiPath + "activateNextQuestion");
+                        if (!response.ok)
+                        {
+                            let body = await response.text();
+                            alert(`Action failed! \n ${response.status} ${response.statusText} \n ${body}`);
+                        }
+                    },
+                    forceQuestionAnswering: async function()
+                    {
+                        let response = await fetch(apiPath + "forceQuestionAnswering");
+                        if (!response.ok)
+                        {
+                            let body = await response.text();
+                            alert(`Action failed! \n ${response.status} ${response.statusText} \n ${body}`);
+                        }
+                    },
+                    forceQuestionResults: async function()
+                    {
+                        let response = await fetch(apiPath + "forceQuestionResults");
+                        if (!response.ok)
+                        {
+                            let body = await response.text();
+                            alert(`Action failed! \n ${response.status} ${response.statusText} \n ${body}`);
+                        }
+                    },
+                    setNextQuestion: async function(questionID)
+                    {
+                        let response = await fetch(apiPath + "setNextQuestion?number=" + encodeURIComponent(questionID));
+                        if (!response.ok)
+                        {
+                            let body = await response.text();
+                            alert(`Action failed! \n ${response.status} ${response.statusText} \n ${body}`);
+                        }
+                    },
+                    loadQuestions: async function(filename)
+                    {
+                        let request = {
+                            method: "POST",
+                            headers: {"Content-Type": "application/json"},
+                            body: JSON.stringify({ filename: filename }),
+                        };
+                        let response = await fetch(apiPath + "loadQuestions", request);
+                        if (!response.ok)
+                        {
+                            let body = await response.text();
+                            alert(`Action failed! \n ${response.status} ${response.statusText} \n ${body}`);
+                        }
+                        else
+                        {
+                            let numOfQuestions = await response.text();
+                            this.current_question.id = 0;
+                            alert(numOfQuestions + " questions loaded!");
+                        }
+                    },
+                    
+                    eventBeginNormalQAnswering: function (event) {
+                        this.current_question.id = event.current_question;
+                        this.current_question.type = event.question_type;
+                        this.current_question.category = event.category;
+                        this.current_question.question = event.question;
+                        this.current_question.answers = event.answers;
+                        this.current_question.correct_answer = 0;
+                        this.current_question.wrong_answers = [];
+                        
+                        this.status = "answering normal question";
+                        this.status_start = Date.now();
+                    },
+                    eventBeginBettingQBetting: function(event)
+                    {
+                        this.current_question.id = event.current_question;
+                        this.current_question.type = event.question_type;
+                        this.current_question.category = event.category;
+                        this.current_question.question = "";
+                        this.current_question.answers = [];
+                        this.current_question.correct_answer = 0;
+                        this.current_question.wrong_answers = [];
+                        
+                        this.status = "betting on a question";
+                        this.status_start = Date.now();
+                    },
+                    eventBeginBettingQAnswering: function(event)
+                    {
+                        this.current_question.question = event.question;
+                        this.current_question.answers = event.answers;
+                        
+                        this.status = "answering betting question";
+                        this.status_start = Date.now();
+                    },
+                    eventBeginEstimationQAnswering: function(event)
+                    {
+                        this.current_question.id = event.current_question;
+                        this.current_question.type = event.question_type;
+                        this.current_question.category = event.category;
+                        this.current_question.question = event.question;
+                        this.current_question.answers = [];
+                        this.current_question.correct_answer = 0;
+                        this.current_question.wrong_answers = [];
+                        
+                        this.status = "answering estimation question";
+                        this.status_start = Date.now();
+                    },
+                    eventBeginVersusQSelecting: function(event)
+                    {
+                        this.current_question.id = event.current_question;
+                        this.current_question.type = event.question_type;
+                        this.current_question.category = event.category;
+                        this.current_question.question = "";
+                        this.current_question.answers = [];
+                        this.current_question.correct_answer = 0;
+                        this.current_question.wrong_answers = [];
+                        
+                        this.status = "selecting attacked player";
+                        this.status_start = Date.now();
+                    },
+                    eventBeginVersusQAnswering: function(event)
+                    {
+                        this.current_question.question = event.question;
+                        this.current_question.answers = event.answers;
+                        
+                        this.status = "answering versus question";
+                        this.status_start = Date.now();
+                    },
+                    eventShowResults: function(event)
+                    {
+                        this.current_question.correct_answer = event.correct_answer;
+                        this.results_players_prev = event.previous_player_data;
+                        this.results_players_new = event.player_data;
+                        
+                        this.results_question_type = this.current_question.type;
+                        this.status = "showing question results";
+                        this.status_start = Date.now();
+                    },
+                    eventGameEnding: function(event)
+                    {
+                        this.current_question.type = "";
+                        this.results_players_new = event.player_data;
+                        
+                        this.status = "game ended";
+                        this.status_start = Date.now();
+                    },
+                },
+                mounted: function()
+                {
+                    //set up regular updates
+                    setInterval(function(inst) { inst.intervalServerUpdate(); }, 2000, this);
+                },
+            });
+        </script>
+    </body>
+</html>
+

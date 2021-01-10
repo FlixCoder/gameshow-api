@@ -1,0 +1,45 @@
+[
+    {
+        "question_type": "NormalQuestion",
+        "category": "Test category 1",
+        "question": "Test question 1",
+        "answers": [
+            "A1",
+            "A2",
+            "A3",
+            "A4"
+        ],
+        "correct_answer": 1
+    },
+    {
+        "question_type": "BettingQuestion",
+        "category": "Test category 2",
+        "question": "Test question 2",
+        "answers": [
+            "A1",
+            "A2",
+            "A3",
+            "A4"
+        ],
+        "correct_answer": 2
+    },
+    {
+        "question_type": "EstimationQuestion",
+        "category": "Test category 3",
+        "question": "Test question 3",
+        "answers": [],
+        "correct_answer": 3
+    },
+    {
+        "question_type": "VersusQuestion",
+        "category": "Test category 4",
+        "question": "Test question 4",
+        "answers": [
+            "A1",
+            "A2",
+            "A3",
+            "A4"
+        ],
+        "correct_answer": 4
+    }
+]

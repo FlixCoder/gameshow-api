@@ -1,0 +1,80 @@
+<html>
+	<head>
+		<title>API Overview</title>
+	</head>
+	<body>
+		<h3>GET /joinPlayer?name=&lt;player name&gt;</h3>
+		<span>400 Bad Request, if name is empty</span><br>
+		<span>OK Returns Text: &lt;actual set player name&gt;</span><br>
+        
+		<h3>GET /getPlayerData</h3>
+        <span>OK Returns JSON: [{name: "", money: 0, money_bet: 0, vs_player: "", answer: 0}]</span><br>
+        
+        <h3>GET /betMoney?name=&lt;name&gt;&amp;money_bet=&lt;money&gt;</h3>
+        <span>406 Not Acceptable, if currently not in betting state for betting question</span><br>
+        <span>400 Bad Request, if name was not found or money_bet is invalid</span><br>
+        <span>OK Returns nothing</span><br>
+        
+        <h3>GET /attackPlayer?name=&lt;name&gt;&amp;vs_player=&lt;attacked player&gt;</h3>
+        <span>406 Not Acceptable, if currently not in selecting state for versus question</span><br>
+        <span>400 Bad Request, if name or vs_player was not found or they are equal</span><br>
+        <span>OK Returns nothing</span><br>
+        
+        <h3>GET /answerQuestion?name=&lt;name&gt;&amp;answer=&lt;ID&gt;</h3>
+        <span>406 Not Acceptable, if currently not in answering state</span><br>
+        <span>400 Bad Request, if name was not found or answer is invalid</span><br>
+        <span>OK Returns nothing</span><br>
+        
+        <h3>GET /getJokerFiftyFifty?name=&lt;name&gt;</h3>
+        <span>406 Not Acceptable, if currently not in answering state for normal or betting question or all jokers were already used</span><br>
+        <span>400 Bad Request, if name was not found</span><br>
+        <span>OK Returns JSON [1, 2] (IDs of wrong answers)</span><br>
+        
+        <h3>GET /getGameEvents</h3>
+        <span>OK Returns JSON: [{id: 0, event_name: "&lt;event name&gt;", event: {"&lt;event name&gt;": {&lt;event related attributes&gt;}}}]</span><br>
+        <span>event_names: BeginNormalQAnswering, BeginBettingQBetting, BeginBettingQAnswering, BeginEstimationQAnswering, BeginVersusQSelecting, BeginVersusQAnswering, ShowResults, GameEnding</span><br>
+        
+        <h3>POST /giveMoney</h3>
+        <span>JSON Parameter: {name: "", money: 0}</span><br>
+        <span>name = player name, money = money to give</span><br>
+        <span>400 Bad Request, if name was not found</span><br>
+        <span>OK Returns JSON: {name: "", money: 0}</span><br>
+        <span>name = player name, money = total money after operation</span><br>
+        
+        <h3>POST /setJokers</h3>
+        <span>JSON Parameter: {name: "", jokers: 0}</span><br>
+        <span>name = player name, jokers = number of available jokers</span><br>
+        <span>400 Bad Request, if name was not found</span><br>
+        <span>OK Returns JSON: {name: "", jokers: 0}</span><br>
+        <span>name = player name, jokers = number of available jokers</span><br>
+        
+        <h3>GET /kickPlayer?name=&lt;player name&gt;</h3>
+        <span>400 Bad Request, if name was not found</span><br>
+        <span>OK Returns nothing</span><br>
+        
+        <h3>GET /activateNextQuestion</h3>
+        <span>406 Not Acceptable, if currently not in results state</span><br>
+        <span>OK Returns nothing</span><br>
+        
+        <h3>GET /forceQuestionAnswering</h3>
+        <span>406 Not Acceptable, if currently not in betting question betting or versus question selecting state</span><br>
+        <span>OK Returns nothing</span><br>
+        
+        <h3>GET /forceQuestionResults</h3>
+        <span>406 Not Acceptable, if currently not in answering state</span><br>
+        <span>OK Returns nothing</span><br>
+        
+        <h3>GET /setNextQuestion?number=&lt;question ID&gt;</h3>
+        <span>406 Not Acceptable, if currently not in results or game ending state</span><br>
+        <span>400 Bad Request, if number does represent a valid question number (must be 1 - len(questions))</span><br>
+        <span>OK Returns previously set question ID</span><br>
+        
+        <h3>POST /loadQuestions</h3>
+        <span>JSON Parameter: {filename: ""}</span><br>
+        <span>filename = JSON file name inside the questions folder</span><br>
+        <span>406 Not Acceptable, if currently not in results or game ending state</span><br>
+        <span>400 Bad Request, if questions could not be loaded (e.g. file not found or wrong format)</span><br>
+        <span>OK Returns Text: &lt;number of available questions&gt;</span><br>
+	</body>
+</html>
+
